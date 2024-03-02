@@ -113,19 +113,6 @@ def duration_convert(x=None):
     else:
         return "00:00:00"
 
-# def duration_convert(x=None):
-#     pattern = r'PT(\d+H)?(\d+M)?(\d+S)?'
-#     find = re.match(pattern, x)
-#     if find:
-#         hours, minutes, seconds = find.groups()
-#         hours = int(hours[:-1]) if hours else 0
-#         minutes = int(minutes[:-1]) if minutes else 0
-#         seconds = int(seconds[:-1]) if seconds else 0
-#         total_seconds = hours * 3600 + minutes * 60 + seconds
-#         return str(timedelta(seconds=total_seconds))
-#     else:
-#         return "00:00:00"
-
 def video_details(youtube, video_ids):
     list_video_details = []
     for video_id in video_ids:
@@ -139,7 +126,7 @@ def video_details(youtube, video_ids):
                     'Upload Date': item['snippet']['publishedAt'][:10],
                     'Upload Time': item['snippet']['publishedAt'][11:19],
                     'Description': item['snippet']['description'],
-                    # 'Duration': duration_convert(datetime.strptime(item['contentDetails']['duration'], "PT%HH%M%M%S")),
+                    'Duration': duration_convert(item['contentDetails']['duration']),
                     'Definition': item['contentDetails']['definition'],
                     'Caption': item['contentDetails']['caption'],
                     'View Count': item['statistics']['viewCount'],
@@ -286,6 +273,93 @@ def copy_data_to_mongodb(channel_id):
         st.error(f"Error copying data to MongoDB: {e}")
 
 # Function to copy data to PostgreSQL
+def create_tables():
+    try:
+        # Connect to PostgreSQL
+        conn = pg.connect(
+            user="postgres",
+            password="abc",
+            host="localhost",
+            port="5432",
+            database="Youtube_project"
+        )
+        cursor = conn.cursor()
+
+        # Create table for Channel if not exists
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS Channel (
+            Channel_id TEXT PRIMARY KEY,
+            Channel_name TEXT,
+            Description_of_channel TEXT,
+            Subscriber_count INTEGER,
+            Total_views INTEGER,
+            Channel_created_date DATE,
+            Total_videos_count INTEGER
+        )
+        """)
+
+        # Create table for Playlist if not exists
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS Playlist (
+            Playlist_id TEXT PRIMARY KEY,
+            Title TEXT,
+            Description TEXT,
+            Video_Count INTEGER,
+            Created_Date DATE,
+            Created_Time TIME,
+            Channel_id TEXT,
+            FOREIGN KEY (Channel_id) REFERENCES Channel(Channel_id)
+        )
+        """)
+
+        # Create table for Video if not exists
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS Video (
+                VideoID TEXT PRIMARY KEY,
+                title TEXT,
+                Upload_Date DATE,
+                Upload_Time TIME,
+                Description TEXT,
+                Duration INTERVAL,
+                Definition TEXT,
+                Caption BOOLEAN,
+                View_Count TEXT,  
+                Likes TEXT,       
+                Comments_Count TEXT, 
+                Channel_id TEXT,
+                FOREIGN KEY (Channel_id) REFERENCES Channel(Channel_id)
+            )
+        """)
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS Comment (
+                Comment_id TEXT PRIMARY KEY,
+                Video_id TEXT,
+                Comment TEXT,
+                Comment_Date DATE,
+                Comment_Time TIME,
+                Author TEXT,
+                FOREIGN KEY (Video_id) REFERENCES Video(VideoID)
+            )
+        """)
+
+        st.success("Tables created successfully!")
+
+    except Exception as e:
+        st.error(f"Error creating tables: {e}")
+
+
+def get_channel_names():
+    # Connect to MongoDB
+    mongo_client = MongoClient(
+        "mongodb+srv://Sarvan26:Sarvan123@project1.dikafru.mongodb.net/?retryWrites=true&w=majority")
+    mongo_db = mongo_client["Youtube_project"]
+
+    # Get channel names
+    channel_names = [channel['Channel_name'] for channel in mongo_db['Channels'].find({}, {"Channel_name": 1})]
+    return channel_names
+
+
 def copy_data_to_sql(selected_channel):
     try:
         # Call create_tables function to create tables in PostgreSQL
@@ -300,7 +374,7 @@ def copy_data_to_sql(selected_channel):
         channel_data = mongo_db['Channels'].find_one({"Channel_name": selected_channel})
         playlist_data = list(mongo_db['Playlists'].find({"Channel id": channel_data['Channel_id']}))
         video_data = list(mongo_db['Videos'].find({"Channel id": channel_data['Channel_id']}))
-        comment_data = list(mongo_db['Comments'].find({"Channel id": channel_data['Channel_id']}))
+        comment_data = list(mongo_db['Comments'].find({"Channel_id": channel_data['Channel_id']}))
 
         # Connect to PostgreSQL
         psql_conn = pg.connect(
@@ -340,26 +414,32 @@ def copy_data_to_sql(selected_channel):
 
         # Insert or update video data
         for video in video_data:
+            # Convert duration from MongoDB format to SQL format
+            duration_sql = duration_convert(video["Duration"])
+
+            # Convert the duration to a string in HH:MI:SS format
+            duration_string = str(duration_sql)
+
+            # Insert the video data into the PostgreSQL database
             psql_cursor.execute(
-                "INSERT INTO Video (VideoID, title, Upload_Date, Upload_Time, Description, Definition, Caption, View_Count, Likes, Comments_Count, Channel_id) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+                "INSERT INTO Video (VideoID, title, Upload_Date, Upload_Time, Description, duration, Definition, Caption, View_Count, Likes, Comments_Count, Channel_id) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
                 "ON CONFLICT (VideoID) DO NOTHING",
                 (video['VideoID'], video['title'], video['Upload Date'], video['Upload Time'], video['Description'],
-                 video['Definition'], video['Caption'], video['View Count'], video['Likes'],
+                 video['Duration'], video['Definition'], video['Caption'], video['View Count'], video['Likes'],
                  video['Comments Count'], video['Channel id'])
-
             )
 
+        # Commit changes before proceeding to comments
+        psql_conn.commit()
 
+        # Fetch existing video IDs from PostgreSQL
+        psql_cursor.execute("SELECT VideoID FROM Video")
+        existing_video_ids = [row[0] for row in psql_cursor.fetchall()]
+
+        # Insert comment data into PostgreSQL
         for comment in comment_data:
-            # Check if the video_id exists in the video table
-            video_id = comment['Video_id']
-            video_exists_query = "SELECT EXISTS(SELECT 1 FROM Video WHERE VideoID = %s)"
-            psql_cursor.execute(video_exists_query, (video_id,))
-            video_exists = psql_cursor.fetchone()[0]
-
-            if video_exists:
-                # Insert comment data into PostgreSQL
+            if comment['Video_id'] in existing_video_ids:
                 psql_cursor.execute(
                     "INSERT INTO Comment (Comment_id, Video_id, Comment, Comment_Date, Comment_Time, Author) "
                     "VALUES (%s, %s, %s, %s, %s, %s) "
@@ -368,16 +448,11 @@ def copy_data_to_sql(selected_channel):
                      comment['Comment_Time'], comment['Author'])
                 )
             else:
-                print(
-                    f"Skipping insertion of comment {comment['Comment_id']} because video_id {video_id} does not exist in the video table.")
-
-            # Commit changes
-        psql_conn.commit()
-
+                # Handle missing video IDs gracefully
+                print(f"Video ID {comment['Video_id']} not found in PostgreSQL. Skipping comment insertion.")
 
         # Commit changes
-        # psql_conn.commit()
-
+        psql_conn.commit()
         st.success("Data copied from MongoDB to PostgreSQL successfully!")
 
     except pg.Error as e:
@@ -391,96 +466,6 @@ def copy_data_to_sql(selected_channel):
         if 'mongo_client' in locals():
             mongo_client.close()
 
-
-
-# Function to create tables in PostgreSQL
-# Function to create tables in PostgreSQL
-def create_tables():
-    try:
-        # Connect to PostgreSQL
-        conn = pg.connect(
-            user="postgres",
-            password="abc",
-            host="localhost",
-            port="5432",
-            database="Youtube_project"
-        )
-        cursor = conn.cursor()
-
-        # Create table for Channel if not exists
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS Channel (
-            Channel_id TEXT PRIMARY KEY,
-            Channel_name TEXT,
-            Description_of_channel TEXT,
-            Subscriber_count INTEGER,
-            Total_views INTEGER,
-            Channel_created_date DATE,
-            Total_videos_count INTEGER
-        )
-        """)
-        conn.commit()
-
-        # Create table for Playlist if not exists
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS Playlist (
-            Playlist_id TEXT PRIMARY KEY,
-            Title TEXT,
-            Description TEXT,
-            Video_Count INTEGER,
-            Created_Date DATE,
-            Created_Time TIME,
-            Channel_id TEXT,
-            FOREIGN KEY (Channel_id) REFERENCES Channel(Channel_id)
-        )
-        """)
-        conn.commit()
-
-        # Create table for Video if not exists
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS Video (
-            VideoID TEXT PRIMARY KEY,
-            title TEXT,
-            Upload_Date DATE,
-            Upload_Time TIME,
-            Description TEXT,
-            Definition TEXT,
-            Caption TEXT,
-            View_Count INTEGER,
-            Likes INTEGER,
-            Comments_Count INTEGER,
-            Channel_id TEXT,
-            FOREIGN KEY (Channel_id) REFERENCES Channel(Channel_id)
-        )
-        """)
-        conn.commit()
-
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS Comment (
-            Comment_id TEXT PRIMARY KEY,
-            Video_id TEXT,
-            Comment TEXT,
-            Comment_Date DATE,
-            Comment_Time TIME,
-            Author TEXT,
-            FOREIGN KEY (Video_id) REFERENCES Video(VideoID)
-        );
-        """)
-        conn.commit()
-
-        st.success("Tables created successfully!")
-
-    except Exception as e:
-        st.error(f"Error creating tables: {e}")
-        # Print the error for debugging
-        print(f"Error creating tables: {e}")
-
-    finally:
-        # Close the cursor and connection
-        cursor.close()
-        conn.close()
-
-# Function to list channels
 def list_channels():
     st.title("List of Channels")
     # Connect to MongoDB
@@ -562,18 +547,19 @@ def query_videos_with_highest_likes():
 
 def query_likes_dislikes_per_video():
     return """
-    SELECT v.title AS Video_Title, SUM(v.Likes) AS Total_Likes
+    SELECT v.title AS Video_Title, SUM(CAST(v.Likes AS INTEGER)) AS Total_Likes
     FROM Video v
     GROUP BY v.title
     """
 
 def query_total_views_per_channel():
     return """
-    SELECT c.Channel_name, SUM(v.View_Count) AS Total_Views
+    SELECT c.Channel_name, SUM(CAST(v.View_Count AS INTEGER)) AS Total_Views
     FROM Video v
     INNER JOIN Channel c ON v.Channel_id = c.Channel_id
     GROUP BY c.Channel_name
     """
+
 
 def query_channels_published_in_2022():
     return """
@@ -586,12 +572,10 @@ def query_channels_published_in_2022():
 def query_average_duration_per_channel():
     return """
     SELECT c.Channel_name, 
-       AVG(EXTRACT(EPOCH FROM COALESCE(v."Duration", '00:00:00')::interval)) AS Average_Duration_seconds
-FROM Video v
-JOIN Channel c ON v.Channel_id = c.Channel_id
-GROUP BY c.Channel_name;
-
-
+       AVG(EXTRACT(EPOCH FROM COALESCE(v.duration, '00:00:00')::interval)) AS Average_Duration_seconds
+    FROM Video v
+    JOIN Channel c ON v.Channel_id = c.Channel_id
+    GROUP BY c.Channel_name;
     """
 
 def query_videos_with_highest_comments():
