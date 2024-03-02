@@ -56,7 +56,8 @@ This will launch the Streamlit app in your default web browser. You can then int
 
 ## Contributors
 
-- Sarvan Kumar M
+- Name : Sarvan Kumar M
+- Email : soulsarvankumar007@gmail.com
 
 ## License
 
