@@ -17,13 +17,13 @@ Before running the application, ensure you have the following:
 1. Clone the repository to your local machine:
 
 ```
-git clone https://github.com/your_username/YouTube-Data-Migration-App.git
+git clone https://github.com/sarvankumar444/Youtube_Api.git
 ```
 
 2. Navigate to the project directory:
 
 ```
-cd YouTube-Data-Migration-App
+cd YouTube_Api-App
 ```
 
 3. Install the required Python packages:
