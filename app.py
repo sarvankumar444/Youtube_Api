@@ -524,8 +524,8 @@ def query_top_10_viewed_videos():
     SELECT v.title AS Video_Title, c.Channel_name AS Channel_Name, v.View_Count
     FROM Video v
     INNER JOIN Channel c ON v.Channel_id = c.Channel_id
-    ORDER BY v.View_Count DESC
-    LIMIT 10
+    ORDER BY v.View_Count::integer DESC
+    LIMIT 10;
     """
 
 def query_comments_per_video():
@@ -533,7 +533,8 @@ def query_comments_per_video():
     SELECT v.title AS Video_Title, COUNT(*) AS Comment_Count
     FROM Video v
     INNER JOIN Comment cm ON v.VideoID = cm.Video_id
-    GROUP BY v.title
+    GROUP BY v.title 
+    ORDER BY COUNT(*)::integer DESC
     """
 
 def query_videos_with_highest_likes():
@@ -541,15 +542,17 @@ def query_videos_with_highest_likes():
     SELECT v.title AS Video_Title, c.Channel_name AS Channel_Name, v.Likes
     FROM Video v
     INNER JOIN Channel c ON v.Channel_id = c.Channel_id
-    ORDER BY v.Likes DESC
+    ORDER BY v.Likes::integer DESC
     LIMIT 10
     """
 
 def query_likes_dislikes_per_video():
     return """
-    SELECT v.title AS Video_Title, SUM(CAST(v.Likes AS INTEGER)) AS Total_Likes
+    SELECT v.title AS Video_Title, c.Channel_name AS Channel_Name, v.Likes
     FROM Video v
-    GROUP BY v.title
+    INNER JOIN Channel c ON v.Channel_id = c.Channel_id
+    ORDER BY v.Likes::integer DESC
+    LIMIT 10
     """
 
 def query_total_views_per_channel():
@@ -558,6 +561,7 @@ def query_total_views_per_channel():
     FROM Video v
     INNER JOIN Channel c ON v.Channel_id = c.Channel_id
     GROUP BY c.Channel_name
+    ORDER BY SUM(CAST(v.View_Count AS INTEGER)) DESC
     """
 
 
