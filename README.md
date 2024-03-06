@@ -1,6 +1,3 @@
-Sure, here's a README file for your Streamlit application:
-
----
 
 # YouTube Data Migration App
 
@@ -20,13 +17,13 @@ Before running the application, ensure you have the following:
 1. Clone the repository to your local machine:
 
 ```
-git clone https://github.com/your_username/YouTube-Data-Migration-App.git
+git clone https://github.com/sarvankumar444/Youtube_Api.git
 ```
 
 2. Navigate to the project directory:
 
 ```
-cd YouTube-Data-Migration-App
+cd YouTube_Api-App
 ```
 
 3. Install the required Python packages:
@@ -56,12 +53,9 @@ This will launch the Streamlit app in your default web browser. You can then int
 
 ## Contributors
 
-- Sarvan Kumar M
+- Name : Sarvan Kumar M
+- Email : soulsarvankumar007@gmail.com
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-Feel free to customize the README file according to your project's specific requirements and add any additional information or instructions as needed.
