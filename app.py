@@ -16,7 +16,7 @@ import re
 
 
 
-api_key="AIzaSyDRQRyHfwqmI-eQ1s-ZinGEMsHVtyz-9Kk"
+api_key="Your_api_key"
 api_service_name = "youtube"
 api_version = "v3"
 
